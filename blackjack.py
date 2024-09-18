@@ -11,25 +11,38 @@ from typing import List
 from collections import deque
 import matplotlib.pyplot as plt
 import numpy as np
+import ast
+
 
 isVerbose = False
-vprint = print if isVerbose else lambda *a, **k,: None
+def vprint(*args, **kwargs):
+    if isVerbose:
+        print(*args, **kwargs)
 
 @click.command()
-@click.option('-s', '--shoesize', default=6, help='An integer representing the amount of decks to use in the shoe. Default is 6 decks.')
-@click.option('-b', '--bankroll', default=10000, help='Determines the amount of dollars that each player begins the game with in their bankroll. Default is $1000.')
+@click.option('-s', '--shoesize', default=8, help='An integer representing the amount of decks to use in the shoe. Default is 8 decks.')
+@click.option('-b', '--bankroll', default=100, help='Determines the amount of dollars that each player begins the game with in their bankroll. Default is $1000.')
 @click.option('-h', '--hands', default=1000, help='Determines the number of hands to deal. Default is 1000.')
 @click.option('-t', '--tablemin', default=10, help='Determines the minimum table bet. Default is $10.')
-@click.option('-p', '--penetration', default=0.84, help='Dictates the deck penetration by the dealer. Default is 0.84 which means that the dealer will penetrate 84 percent of the shoe before re-shuffling')
-@click.option('-d', '--dealersettings', default="[17, True, True, True, True]", help='Assigns the dealer rules.')
+@click.option('-p', '--penetration', default=0.5, help='Dictates the deck penetration by the dealer. Default is 0.50 which means that the dealer will penetrate 50 percent of the shoe before re-shuffling')
+@click.option('-d', '--dealersettings', default="[17, True, False, False, True]", 
+              help='Assigns the dealer rules.', type=str)
+
 @click.option('-v', '--verbose', default=False, help='Prints all player, hand, and game information.')
 def main(shoesize, bankroll, hands, tablemin, penetration, dealersettings, verbose):
+    dealersettings = ast.literal_eval(dealersettings)
     print("Running blackjack simulation with variables:")
-    print("Shoe size: ", shoesize, " | Bankroll: ", bankroll, " | Number of hands to simulate: ", hands, " | Minimum Table Bet: ", tablemin)
-    houseRules = HouseRules(standValue=dealersettings[0], DASoffered=dealersettings[1], RSAoffered=dealersettings[2], LSoffered=dealersettings[3], doubleOnSoftTotal=dealersettings[4])
+    print("Shoe size: ", shoesize, " | Bankroll: ", bankroll, " | Number of hands to simulate: ", hands, 
+          " | Minimum Table Bet: ", tablemin)
+
+    # Pasar dealersettings como argumentos desempaquetados si es necesario
+    houseRules = HouseRules(standValue=dealersettings[0], DASoffered=dealersettings[1], 
+                            RSAoffered=dealersettings[2], LSoffered=dealersettings[3], 
+                            doubleOnSoftTotal=dealersettings[4])
     game = BlackJackGame(shoesize, bankroll, hands, tablemin, penetration, houseRules)
     global isVerbose
     isVerbose = verbose
+
     game.startGame()
     gamedata = GameData(game)
     gamedata.getDealerStatistics()
@@ -226,7 +239,6 @@ class BlackJackGame:
             return splitHand
         vprint("Player decided not to split pair.")
         return None
-
     
     def hit(self, player: Player, hand: Hand, count: HiLoCount):
         hitCard = self.dealer.dealCard()
@@ -239,7 +251,6 @@ class BlackJackGame:
         vprint("Dealer is now playing their hand...")
         action: GameActions = None
         softTotalDeductionCount = 0
-
         while (action != GameActions.STAND.value):
             if self.dealer.hand.isBust():
                 if softTotalDeductionCount < self.dealer.hand.getAcesCount():
@@ -366,7 +377,6 @@ class BlackJackGame:
             
             # Now, the dealer will play out their hand
             self.playDealerHand(count)
-
             # Next, determine which existing hands beat the dealer and perform all necessary payouts
             self.handleRemainingHands(playersInGame)
         
