@@ -12,6 +12,7 @@ class Player:
         self.isVerbose = isVerbose
         self.hands: List[Hand] = []
         self.handData = [0, 0, 0] # [Wins, Losses, Draws]
+        self.reward = 0
     
     def calculateBetSize(self, tableMin, trueCount):
         if self.strategy.isCounting:

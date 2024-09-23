@@ -134,14 +134,14 @@ class BlackJackGame:
         self.dealer.discardDealersCards()
 
     def dealDealersHand(self, count):
-        # Deal out the dealers cards
         upcard = self.dealer.dealCard()
         self.dealer.setUpCard(upcard)
         count.updateRunningCount(upcard.getValue())
-        # The hidden card is not added to the count yet as only the dealer knows this information
         hiddenCard = self.dealer.dealCard()
         dealerHand = Hand([upcard, hiddenCard], 0)
         self.dealer.updateHand(dealerHand)
+        if self.dealer.upcard is None:
+            raise ValueError("Dealer's upcard is not initialized.")
         vprint("Dealer shows:")
         if isVerbose: upcard.printCard()
         vprint("Dealer hides:")
@@ -398,6 +398,56 @@ class BlackJackGame:
                 if player.bankroll < self.tableMin:
                     vprint(player.name, " has gone broke and is out of the game.")
                     playersInGame.remove(player)
+
+    def get_state(self, player: Player):
+        """
+        Devuelve el estado actual del juego para el jugador.
+        """
+        dealer_upcard_value = self.dealer.upcard.getValue() if self.dealer.upcard else 0  # Valor por defecto: 0
+        player_hand_value = player.getStartingHand().getHandValue() if player.hands else 0  # Valor por defecto: 0
+        count = self.getTrueCount(self.dealer.count) if self.dealer.count else 0  # Valor por defecto: 0
+        player_cards = [(card.getRank(), card.suit) for card in player.getStartingHand().getCards()] if player.hands else []
+
+        state = {
+            "dealer_upcard_value": dealer_upcard_value,
+            "player_hand_value": player_hand_value,
+            "player_cards": player_cards,
+            "true_count": count,
+            "player_bankroll": player.bankroll if player.bankroll else 0  # Valor por defecto: 0
+        }
+        return state
+
+
+    
+    # Modificar las recompensas después de cada ronda
+    def handleRemainingHands(self, players: List[Player]):
+        dealer_value = self.dealer.hand.finalHandValue
+        for player in players:
+            for hand in player.hands:
+                vprint(player.name, " has ", hand.finalHandValue, " against the dealer's ", dealer_value)
+                if hand.finalHandValue > dealer_value:
+                    vprint("Player wins!")
+                    payout = self.dealer.handlePayout(hand.betSize, isBlackjack=False)
+                    vprint("Initial bet: $", hand.getInitialBet(), " Payout: $", payout)
+                    player.updateBankroll(hand.betSize + payout)
+                    # Recompensa positiva
+                    reward = payout
+                elif hand.finalHandValue < dealer_value:
+                    vprint("Player loses!")
+                    self.dealer.updateGains(hand.betSize)
+                    # Recompensa negativa
+                    reward = -hand.getInitialBet()
+                else:
+                    vprint("Player pushes.")
+                    player.updateBankroll(hand.betSize)
+                    # Sin recompensa
+                    reward = 0
+                player.reward = reward  # Asignar la recompensa al jugador
+
+    def getTrueCount(self, count: HiLoCount):
+        decksRemaining = self.dealer.shoe.getDecksRemaining()
+        trueCount = count.getTrueCount(decksRemaining)
+        return trueCount
 
 
 

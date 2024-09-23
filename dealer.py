@@ -2,6 +2,7 @@ from shoe import Shoe
 from card import Card
 from hand import Hand
 from typing import List
+from count import HiLoCount
 
 class HouseRules:
     def __init__(self, standValue, DASoffered, RSAoffered, LSoffered, doubleOnSoftTotal):
@@ -23,6 +24,7 @@ class Dealer:
         self.upcard: Card = None
         self.losses = 0
         self.gains = 0
+        self.count = HiLoCount()
     
     def dealCard(self):
         return self.shoe.drawCard()

@@ -164,8 +164,9 @@ class BasicStrategy(StrategyInterface):
         self.softTotals.update({2: ["H", "H", "H", "H", "H", "H", "H", "H", "H", "H"]})
     
     def softTotalOptimalDecision(self, hand: Hand, dealerUpcard: int, softTotalDeductionCount):
-        if random.randrange(0,1) > self.accuracy:
-            return random.choice([GameActions.HIT.value, GameActions.STAND.value, GameActions.DOUBLE.value])
+        if dealerUpcard is None:
+            dealerUpcard = 1  # Valor por defecto si no hay carta visible (puedes cambiarlo si prefieres otro)
+            
         acelessTotalVal = hand.getSoftTotalAcelessValue(softTotalDeductionCount)
         if acelessTotalVal >= 8:
             return GameActions.STAND.value
@@ -173,6 +174,7 @@ class BasicStrategy(StrategyInterface):
             dealerUpcard = 1
         chartVal: GameActions = self.softTotals.get(acelessTotalVal)[dealerUpcard - 1]
         return chartVal
+
     
     def willTakeInsurance(self, runningCount):
         # Perfect basic strategy never takes insurance unless running count is exceptionally high
