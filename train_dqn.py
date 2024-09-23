@@ -41,10 +41,14 @@ def classify_true_count(tc):
 
 for e in range(n_episodes):
     # Reiniciar el juego
+    print(f"Starting episode {e + 1}/{n_episodes}")  # Agrega este print para verificar que comienza cada episodio
     game.startGame()
     done = False
     while not done:
         for player in game.players:
+            print(f"Processing player {player.name} in episode {e + 1}")  # Este print te mostrará el progreso del jugador
+            if player.name != "DQN Agent":
+                continue #Salta los jugadores que no son el agente DQN
             state = game.get_state(player)
             state_arr = [state["player_hand_value"], state["dealer_upcard_value"], state["true_count"], state["player_bankroll"]]
 

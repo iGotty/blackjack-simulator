@@ -29,7 +29,11 @@ class Player:
         self.hands.clear()
     
     def getStartingHand(self):
+        if len(self.hands) == 0:
+            raise ValueError(f"Error: el jugador {self.name} no tiene manos asignadas.")
         return self.hands[0]
+
+
     
     def splitPair(self, hand: Hand):
         splitHand = Hand([hand.splitHand()], hand.getInitialBet())

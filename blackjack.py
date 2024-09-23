@@ -5,7 +5,7 @@ from count import HiLoCount
 from hand import Hand
 from card import Card, CardValue
 from dealer import Dealer, HouseRules
-from strategies import BasicStrategy, CasinoStrategy, RandomStrategy, GameActions
+from strategies import BasicStrategy, CasinoStrategy, RandomStrategy, GameActions, DQNStrategy
 from bet import spread1_50, spread1_6
 from typing import List
 from collections import deque
@@ -26,14 +26,14 @@ def vprint(*args, **kwargs):
 @click.option('-t', '--tablemin', default=10, help='Determines the minimum table bet. Default is $10.')
 @click.option('-p', '--penetration', default=0.5, help='Dictates the deck penetration by the dealer. Default is 0.50 which means that the dealer will penetrate 50 percent of the shoe before re-shuffling')
 @click.option('-d', '--dealersettings', default="[17, True, False, False, True]", 
-              help='Assigns the dealer rules.', type=str)
+            help='Assigns the dealer rules.', type=str)
 
 @click.option('-v', '--verbose', default=False, help='Prints all player, hand, and game information.')
 def main(shoesize, bankroll, hands, tablemin, penetration, dealersettings, verbose):
     dealersettings = ast.literal_eval(dealersettings)
     print("Running blackjack simulation with variables:")
     print("Shoe size: ", shoesize, " | Bankroll: ", bankroll, " | Number of hands to simulate: ", hands, 
-          " | Minimum Table Bet: ", tablemin)
+        " | Minimum Table Bet: ", tablemin)
 
     # Pasar dealersettings como argumentos desempaquetados si es necesario
     houseRules = HouseRules(standValue=dealersettings[0], DASoffered=dealersettings[1], 
@@ -44,6 +44,7 @@ def main(shoesize, bankroll, hands, tablemin, penetration, dealersettings, verbo
     isVerbose = verbose
 
     game.startGame()
+
     gamedata = GameData(game)
     gamedata.getDealerStatistics()
     gamedata.getPlayerStatistics()
@@ -109,16 +110,9 @@ class BlackJackGame:
         vprint("Deck Penetration %: ", penetration, " | Minimum table bet: $", tableMin)
         self.dealer = Dealer(penetration, shoeSize, houseRules, CasinoStrategy(houseRules, isCounting=False, accuracy=1), isVerbose)
 
-        self.players = [Player("Counting with 1-6 Bet Spread", bankroll, BasicStrategy(houseRules, isCounting=True, accuracy=1), spread1_6(), isVerbose),
-                        Player("Counting with 1-50 Bet Spread", bankroll, BasicStrategy(houseRules, isCounting=True, accuracy=1), spread1_50(), isVerbose),
-                        Player('Counting with 1-6 Bet Spread, 50% Accurate Basic Strategy', bankroll, BasicStrategy(houseRules, isCounting=True, accuracy=0.50), spread1_6(), isVerbose),
-                        Player("Perfect Basic Strategy", bankroll, BasicStrategy(houseRules, isCounting=False, accuracy=1), spread1_6(), isVerbose),
-                        Player('99% Accurate Basic Strategy', bankroll, BasicStrategy(houseRules, isCounting=False, accuracy=0.99), spread1_50(), isVerbose),
-                        Player('95% Accurate Basic Strategy', bankroll, BasicStrategy(houseRules, isCounting=False, accuracy=0.95), spread1_50(), isVerbose),
-                        Player('75% Accurate Basic Strategy', bankroll, BasicStrategy(houseRules, isCounting=False, accuracy=0.75), spread1_50(), isVerbose),
-                        Player('Casino Rules', bankroll, CasinoStrategy(houseRules, isCounting=False, accuracy=1), spread1_6(), isVerbose),
-                        Player("Random", bankroll, RandomStrategy(houseRules, isCounting=False, accuracy=1), spread1_6(), isVerbose)]
-        vprint("There are ", len(self.players), " players in the game.")
+        self.players = [Player("DQN Agent", bankroll, DQNStrategy(), None, isVerbose)]
+
+
     
     def clearAllCards(self, players: List[Player]):
         # Collect the cards from each player before moving onto the next round and put the cards in the
@@ -160,7 +154,9 @@ class BlackJackGame:
 
             player.updateBankroll(-1 * betSize)
             player.updateHand(Hand([card1, card2], betSize))
+            vprint(f"Player {player.name} now has hands: {len(player.hands)}")
             if isVerbose: player.getStartingHand().printHand(player.name)
+
     
     def doubleDown(self, player: Player, hand: Hand, count: HiLoCount):
         vprint("Doubling down!")
@@ -278,59 +274,68 @@ class BlackJackGame:
                 self.dealer.hand.setFinalHandValue(self.dealer.hand.getHandValue() - softTotalDeductionCount * 10)
                 break
 
-    def playHands(self, player: Player, dealerUpcard: Card, handNumber, count):
-        dealtHand = player.getStartingHand()
-        vprint(player.name, " is playing their hand...")
+def playHands(self, player: Player, dealerUpcard: Card, handNumber, count):
+    dealtHand = player.getStartingHand()
+    vprint(player.name, " is playing their hand...")
 
-        # Check if the dealt hand is a blackjack and payout immediately if it is
-        if dealtHand.isBlackjack():
-            self.handlePlayerBlackjack(player, dealtHand)
-        else:
-            handQueue = deque()
-            handQueue.append(player.getStartingHand())
+    # Check if the dealt hand is a blackjack and payout immediately if it is
+    if dealtHand.isBlackjack():
+        self.handlePlayerBlackjack(player, dealtHand)
+    else:
+        handQueue = deque()
+        handQueue.append(player.getStartingHand())
 
-            while len(handQueue) > 0:
-                hand = handQueue.pop()
-                action: GameActions = None
-                softTotalDeductionCount = 0
+        while len(handQueue) > 0:
+            hand = handQueue.pop()
+            action: GameActions = None
+            softTotalDeductionCount = 0
 
-                while (action != GameActions.STAND.value):
-                    if hand.isBust():
-                        if softTotalDeductionCount < hand.getAcesCount():
-                            vprint("BUST! Ace now becomes 1. Old hand value: ", hand.getHandValue(), " New value: ", hand.getHandValue() - 10)
-                            softTotalDeductionCount += 1
-                        else:
-                            vprint("BUST! Value is: ", hand.getHandValue() - softTotalDeductionCount * 10)
-                            self.handleBustHand(player, hand)
-                            break
-                    if hand.isPair():
-                        vprint("We have a pair...")
-                        splitHand = self.handleSplitPair(player, hand, dealerUpcard, count)
-                        if splitHand is not None:
-                            handQueue.append(splitHand)
-                            handQueue.append(hand)
-                            break
-                    
-                    if hand.isSoftTotal(softTotalDeductionCount) and softTotalDeductionCount < hand.getAcesCount():
-                        vprint("We have a soft total...")
-                        action = player.strategy.softTotalOptimalDecision(hand, dealerUpcard.getValue(), softTotalDeductionCount)
+            iteration_limit = 100  # Número máximo de iteraciones permitidas
+            iterations = 0
+
+            while (action != GameActions.STAND.value):
+                iterations += 1
+                if iterations > iteration_limit:
+                    vprint("Exceeded iteration limit, breaking loop.")
+                    break
+                
+                if hand.isBust():
+                    if softTotalDeductionCount < hand.getAcesCount():
+                        vprint("BUST! Ace now becomes 1. Old hand value: ", hand.getHandValue(), " New value: ", hand.getHandValue() - 10)
+                        softTotalDeductionCount += 1
                     else:
-                        # Get hard total value
-                        vprint("We have a hard total of ", hand.getHandValue()- softTotalDeductionCount * 10)
-                        action = player.strategy.hardTotalOptimalDecision(hand, dealerUpcard.getValue(), softTotalDeductionCount)
-                    if (action == GameActions.HIT.value):
-                        vprint("Player is gonna hit!")
-                        self.hit(player, hand, count)
-                    elif (action == GameActions.STAND.value):
-                        vprint("Player will stand")
-                        hand.setFinalHandValue(hand.getHandValue() - softTotalDeductionCount * 10)
+                        vprint("BUST! Value is: ", hand.getHandValue() - softTotalDeductionCount * 10)
+                        self.handleBustHand(player, hand)
                         break
-                    elif (action == GameActions.DOUBLE.value):
-                        vprint("Double down!")
-                        self.doubleDown(player, hand, count)
-                    
-        vprint(player.name, " has played all of their hands!")
-    
+                
+                if hand.isPair():
+                    vprint("We have a pair...")
+                    splitHand = self.handleSplitPair(player, hand, dealerUpcard, count)
+                    if splitHand is not None:
+                        handQueue.append(splitHand)
+                        handQueue.append(hand)
+                        break
+                
+                if hand.isSoftTotal(softTotalDeductionCount) and softTotalDeductionCount < hand.getAcesCount():
+                    vprint("We have a soft total...")
+                    action = player.strategy.softTotalOptimalDecision(hand, dealerUpcard.getValue(), softTotalDeductionCount)
+                else:
+                    # Get hard total value
+                    vprint("We have a hard total of ", hand.getHandValue() - softTotalDeductionCount * 10)
+                    action = player.strategy.hardTotalOptimalDecision(hand, dealerUpcard.getValue(), softTotalDeductionCount)
+                
+                if (action == GameActions.HIT.value):
+                    vprint("Player is gonna hit!")
+                    self.hit(player, hand, count)
+                elif (action == GameActions.STAND.value):
+                    vprint("Player will stand")
+                    hand.setFinalHandValue(hand.getHandValue() - softTotalDeductionCount * 10)
+                    break
+                elif (action == GameActions.DOUBLE.value):
+                    vprint("Double down!")
+                    self.doubleDown(player, hand, count)
+                
+    vprint(player.name, " has played all of their hands!")
     def printRoundInformation(self, players: List[Player], count: HiLoCount, roundNumber: int):
         print(" - - - - - - - - - - -")
         print(" - - - - - - - - - - -")
@@ -359,10 +364,11 @@ class BlackJackGame:
         while (handCount <= self.numHands and len(playersInGame) > 0):
             if isVerbose:
                 self.printRoundInformation(playersInGame, count, handCount)
+            vprint(f"Dealing hands for round {handCount}...")    
             # Deal out the players' and dealer's cards
             self.dealPlayersHands(playersInGame, count)
             self.dealDealersHand(count)
-
+            vprint("Players and dealer have been dealt their initial cards.")
             # If the dealer shows an ace, dealer will offer insurance to all players.
             if self.dealer.insuranceIsOffered():
                 self.handleInsurance(playersInGame, count)
@@ -374,16 +380,18 @@ class BlackJackGame:
                 # Allow players to play out each of their hands
                 for player in playersInGame:
                     self.playHands(player, self.dealer.upcard, handCount, count)
-            
+            vprint("Dealer is playing their hand now...")
             # Now, the dealer will play out their hand
             self.playDealerHand(count)
+
+            vprint("Dealer finished playing their hand. Checking results...")
             # Next, determine which existing hands beat the dealer and perform all necessary payouts
             self.handleRemainingHands(playersInGame)
         
             handCount = handCount + 1
 
             self.clearAllCards(playersInGame)
-
+            vprint(f"Completed round {handCount-1}.")
             # Used to debug deck sizes to ensure that no cards are being lost:
             self.dealer.ensureDeckCompleteness(isVerbose=True)
             

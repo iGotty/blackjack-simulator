@@ -1,7 +1,12 @@
 from hand import Hand
 from enum import Enum, auto
 from dealer import HouseRules
+from dqn_agent import DQNAgent
 import random
+ #Definir el tamaño del estado y de las acciones
+state_size = 4  # Ajustar según las características de tu entorno
+action_size = 3  # HIT, STAND, DOUBLE (asegúrate de ajustar según las posibles acciones)
+
 class GameActions(Enum):
     HIT = 'H'
     STAND = 'S'
@@ -179,3 +184,11 @@ class BasicStrategy(StrategyInterface):
     def willTakeInsurance(self, runningCount):
         # Perfect basic strategy never takes insurance unless running count is exceptionally high
         return runningCount >= 8
+class DQNStrategy(StrategyInterface):  # Asegúrate de que herede de StrategyInterface si es necesario
+    def __init__(self):
+        self.agent = DQNAgent(state_size, action_size)  # Asegúrate de que los parámetros estén bien definidos
+        self.isCounting = False  # Definir isCounting para evitar el error
+
+    def act(self, state):
+        return self.agent.act(state)  # Utiliza la lógica del agente para elegir la acción
+
